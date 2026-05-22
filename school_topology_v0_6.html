@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>School Network Topology v0.6</title>
+    <!-- 引入 vis-network (本地離線版) -->
+    <script type="text/javascript" src="lib/vis-network.min.js"></script>
+    <style>
+        body { 
+            margin: 0; 
+            padding: 0; 
+            display: flex; 
+            height: 100vh; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background-color: #f4f6f8;
+            overflow: hidden;
+        }
+        #network-container { 
+            flex: 1; 
+            height: 100%; 
+            border-right: 1px solid #ddd; 
+            background-color: #ffffff; 
+        }
+        #info-panel { 
+            width: 350px; 
+            padding: 20px; 
+            background-color: #fdfdfd; 
+            box-shadow: -2px 0 10px rgba(0,0,0,0.05); 
+            overflow-y: auto; 
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+        }
+        h2 { 
+            margin-top: 0; 
+            font-size: 1.4em; 
+            color: #333; 
+            border-bottom: 2px solid #eee; 
+            padding-bottom: 10px;
+        }
+        .info-item { 
+            margin-bottom: 15px; 
+            background: #fff;
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 6px;
+        }
+        .info-label { 
+            font-weight: 600; 
+            color: #666; 
+            font-size: 0.85em; 
+            display: block; 
+            margin-bottom: 4px; 
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .info-value { 
+            color: #222; 
+            word-break: break-all; 
+            font-size: 1em;
+        }
+        .placeholder { 
+            color: #999; 
+            font-style: italic; 
+            text-align: center;
+            margin-top: 40px;
+        }
+        /* Top right info panel */
+        #top-right-info {
+            position: absolute;
+            top: 20px;
+            right: 370px; /* info-panel width(350) + margin(20) */
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px 20px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            text-align: right;
+            z-index: 10;
+        }
+        #top-right-info h1 {
+            margin: 0 0 8px 0;
+            font-size: 1.3em;
+            color: #222;
+        }
+        #top-right-info p {
+            margin: 0;
+            font-size: 0.9em;
+            color: #555;
+        }
+        .action-btns {
+            margin-top: 12px;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #0056b3;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #004494;
+        }
+        /* Legend styles */
+        .legend {
+            margin-top: auto;
+            border-top: 2px solid #eee;
+            padding-top: 15px;
+        }
+        .legend h3 {
+            margin: 0 0 10px 0;
+            font-size: 1.1em;
+            color: #333;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 0.95em;
+            color: #444;
+        }
+        .legend-color {
+            width: 18px;
+            height: 18px;
+            margin-right: 10px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+        @media print {
+            body { background-color: #fff; }
+            #info-panel, .action-btns { display: none !important; }
+            #network-container { border: none; }
+            #top-right-info {
+                right: 20px;
+                top: 20px;
+                box-shadow: none;
+                border: 1px solid #eee;
+                background: transparent;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div id="network-container"></div>
+
+<!-- 版本資訊與匯出按鈕 -->
+<div id="top-right-info">
+    <h1>School Network Topology v0.6</h1>
+    <p>Data source: FortiGate CLI + 3810M SNMP + field photos</p>
+    <div class="action-btns">
+        <button onclick="window.print()">Export / Print</button>
+    </div>
+</div>
+
+<div id="info-panel">
+    <div>
+        <h2>節點資訊</h2>
+        <div id="node-details">
+            <div class="placeholder">請點擊左側圖表中的節點以檢視詳細資訊。</div>
+        </div>
+    </div>
+    
+    <!-- 圖例 -->
+    <div class="legend">
+        <h3>圖例</h3>
+        <div class="legend-item"><div class="legend-color" style="background:#ffebee; border-color:#f44336;"></div>Firewall (紅色)</div>
+        <div class="legend-item"><div class="legend-color" style="background:#fff3e0; border-color:#ff9800;"></div>Core (橘色)</div>
+        <div class="legend-item"><div class="legend-color" style="background:#e3f2fd; border-color:#2196f3;"></div>Distribution (藍色)</div>
+        <div class="legend-item"><div class="legend-color" style="background:#e8f5e9; border-color:#4caf50;"></div>Access (綠色)</div>
+        <div class="legend-item"><div class="legend-color" style="background:#f5f5f5; border-color:#9e9e9e;"></div>待確認 (灰色)</div>
+    </div>
+</div>
+
+<script>
+    // 定義節點資料 (手動寫入，無須後端)
+    const nodeData = [
+        { id: 'TANet', label: 'TANet', group: 'unknown', level: 0, hostname: 'TANet', ip: 'N/A', mac: 'N/A', role: 'Upstream', confidence: 'high', notes: '上游學術網路' },
+        { id: 'FortiGate', label: 'FortiGate 500E', group: 'firewall', level: 1, hostname: 'FortiGate', ip: '192.168.1.254', mac: '待確認', role: 'Gateway', confidence: 'high', notes: 'LAN1接5130-01 port 48; LAN2接port 12' },
+        { id: 'Core01', label: 'HPE 3810M Core01', group: 'core', level: 1, hostname: 'HPE-3810M-Core01', ip: '192.168.1.21', mac: '08:97:34:ec:8a:00', role: 'Core', confidence: 'confirmed', notes: 'Aruba 3810M' },
+        { id: '5130-01', label: 'HPE-5130-01\n(VLAN待確認)', group: 'distribution', level: 2, hostname: 'HPE-5130-01', ip: '192.168.1.23', mac: '2c:23:3a:84:75:60', role: 'Distribution', confidence: 'confirmed', notes: '接在 Core01 port 16' },
+        { id: '5130-03', label: 'HPE-5130-03\n(位置待確認)', group: 'distribution', level: 2, hostname: 'HPE-5130-03', ip: '待確認', mac: '2c:23:3a:84:7c:d6', role: 'Access', confidence: 'confirmed', notes: '接在 Core01 port 9' },
+        { id: 'Cisco9200', label: 'Cisco 9200\n(待確認)', group: 'access', level: 2, hostname: 'Cisco-9200', ip: '待確認', mac: '待確認', role: 'Access', confidence: '待確認', notes: '接在 FortiGate port5 / WiFi 下游，供 FortiAP / WiFi 使用' },
+        { id: 'ICX7150', label: 'ICX7150', group: 'access', level: 3, hostname: 'ICX7150-24P-Switch', ip: '192.168.1.87', mac: 'd4:c1:9e:44:29:40', role: 'Access', confidence: 'high', notes: '接在 5130-03 下游 (Core01 port 9)' },
+        { id: 'Cab_1F', label: '1F 幼兒園廁所旁分機櫃\n(型號待確認)', group: 'access', level: 3, hostname: 'Unknown_1F_Cab', ip: '待確認', mac: '待確認 (101 MACs)', role: 'Access', confidence: 'high', notes: '舊光纖，可能串接多個 1F-4F 櫃' },
+        { id: 'Siraya', label: 'Siraya Pi', group: 'access', level: 3, hostname: 'Siraya-Radar', ip: '192.168.1.12', mac: 'dc:a6:32:8e:2f:97', role: 'Server', confidence: 'confirmed', notes: '接在 5130-01 port 21' },
+        { id: 'FortiAP', label: 'FortiAP', group: 'access', level: 3, hostname: 'FortiAP', ip: '待確認', mac: '待確認', role: 'Access', confidence: '待確認', notes: '接在 Cisco 9200 下游' }
+    ];
+
+    // 定義邊線資料
+    const edgeData = [
+        { from: 'TANet', to: 'FortiGate', label: 'TANet' },
+        { from: 'FortiGate', to: '5130-01', label: 'LAN1 → 5130 port48' },
+        { from: 'FortiGate', to: '5130-01', label: 'LAN2 → 5130 port12' },
+        { from: 'FortiGate', to: 'Cisco9200', label: 'port5/WiFi → Cisco 9200 (port 待確認)' },
+        { from: 'Core01', to: '5130-01', label: 'port16 → 5130-01 (port 待確認)\nVLAN1 untagged, VLAN2/3 tagged' },
+        { from: 'Core01', to: '5130-03', label: 'port9 → 5130-03 (port 1/0/49)' },
+        { from: 'Core01', to: 'Cab_1F', label: 'port12 → 1F 分機櫃 (port 待確認)' },
+        { from: '5130-01', to: 'Siraya', label: '5130 port21 (VLAN 待確認) → Siraya' },
+        { from: '5130-03', to: 'ICX7150', label: 'port 待確認 → ICX7150 (port 待確認)' },
+        { from: 'Cisco9200', to: 'FortiAP', label: 'Cisco 9200 (port 待確認) → FortiAP' }
+    ];
+
+    const nodes = new vis.DataSet(nodeData);
+    const edges = new vis.DataSet(edgeData);
+
+    const container = document.getElementById('network-container');
+    const data = { nodes: nodes, edges: edges };
+    
+    // 設定樣式與階層
+    const options = {
+        nodes: {
+            shape: 'box',
+            margin: 12,
+            borderWidth: 2,
+            font: { size: 14, multi: true, face: 'sans-serif' }
+        },
+        edges: {
+            arrows: 'to',
+            font: { size: 12, align: 'middle', background: 'rgba(255, 255, 255, 0.8)' },
+            color: { color: '#888', highlight: '#333' },
+            length: 250,
+            smooth: { type: 'cubicBezier', forceDirection: 'vertical', roundness: 0.4 }
+        },
+        groups: {
+            firewall: { color: { background: '#ffebee', border: '#f44336' }, font: { color: '#b71c1c' } }, // 紅色
+            core: { color: { background: '#fff3e0', border: '#ff9800' }, font: { color: '#e65100' } }, // 橘色
+            distribution: { color: { background: '#e3f2fd', border: '#2196f3' }, font: { color: '#0d47a1' } }, // 藍色
+            access: { color: { background: '#e8f5e9', border: '#4caf50' }, font: { color: '#1b5e20' } }, // 綠色
+            unknown: { color: { background: '#f5f5f5', border: '#9e9e9e' }, font: { color: '#424242' } } // 灰色
+        },
+        layout: {
+            hierarchical: {
+                direction: 'UD',
+                levelSeparation: 200,
+                nodeSpacing: 250,
+                treeSpacing: 250,
+                parentCentralization: true
+            }
+        },
+        physics: false,
+        interaction: {
+            hover: true,
+            tooltipDelay: 200
+        }
+    };
+
+    const network = new vis.Network(container, data, options);
+
+    // 點擊事件處理，更新右側資訊面板
+    network.on('click', function (params) {
+        if (params.nodes.length > 0) {
+            const nodeId = params.nodes[0];
+            const node = nodes.get(nodeId);
+            
+            const detailsHtml = `
+                <div class="info-item"><span class="info-label">Hostname</span><span class="info-value">${node.hostname || '-'}</span></div>
+                <div class="info-item"><span class="info-label">IP Address</span><span class="info-value">${node.ip || '-'}</span></div>
+                <div class="info-item"><span class="info-label">MAC Address</span><span class="info-value">${node.mac || '-'}</span></div>
+                <div class="info-item"><span class="info-label">Role</span><span class="info-value">${node.role || '-'}</span></div>
+                <div class="info-item"><span class="info-label">Confidence</span><span class="info-value">${node.confidence || '-'}</span></div>
+                <div class="info-item"><span class="info-label">Notes</span><span class="info-value">${node.notes || '-'}</span></div>
+            `;
+            document.getElementById('node-details').innerHTML = detailsHtml;
+        } else {
+            document.getElementById('node-details').innerHTML = '<div class="placeholder">請點擊左側圖表中的節點以檢視詳細資訊。</div>';
+        }
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+```mermaid
+flowchart TD
+    subgraph L0 [L0: TANet / 上游]
+        TANet([TANet])
+    end
+
+    subgraph L1 [L1]
+        FortiGate[FortiGate 500E]
+        Core01[HPE 3810M Core01]
+    end
+
+    subgraph L2 [L2]
+        HPE_5130_01["HPE-5130-01<br/>(VLAN設定待確認)"]
+        HPE_5130_03["HPE-5130-03<br/>(實體位置待確認)"]
+        Cisco9200["Cisco 9200<br/>(IP/MAC/uplink port/PoE AP port 待確認)"]
+    end
+
+    subgraph L3 [L3]
+        Siraya["Siraya Pi"]
+        ICX7150["ICX7150"]
+        Cab_1F["1F 幼兒園廁所旁分機櫃<br/>(設備型號待確認)"]
+        FortiAP["FortiAP"]
+    end
+
+    TANet --> FortiGate
+
+    FortiGate -- "LAN1 → 5130 port48" --> HPE_5130_01
+    FortiGate -- "LAN2 → 5130 port12" --> HPE_5130_01
+    FortiGate -- "port5/WiFi → Cisco 9200 (port 待確認)" --> Cisco9200
+
+    Core01 -- "port16 → 5130-01 (port 待確認)<br/>VLAN1 untagged, VLAN2/3 tagged" --> HPE_5130_01
+    Core01 -- "port9 → 5130-03 (port 1/0/49)" --> HPE_5130_03
+    Core01 -- "port12 → 1F 分機櫃 (port 待確認)" --> Cab_1F
+
+    HPE_5130_01 -- "5130 port21 (VLAN 待確認) → Siraya" --> Siraya
+    HPE_5130_03 -- "(port 待確認) → ICX7150 (port 待確認)" --> ICX7150
+    Cisco9200 -- "Cisco 9200 (port 待確認) → FortiAP" --> FortiAP
+```
